@@ -1,505 +1,152 @@
-========================================
- PHASE 1 — PROJECT SETUP & ENVIRONMENT
-========================================
-
-WHAT IS PHASE 1?
-----------------
-Phase 1 is the starting point of the "catalyx-backend-py" project.
-The goal of this phase is simple: get a working Python backend skeleton
-running on the machine, with all the tools and libraries it will need
-later already installed. Nothing about business logic, databases, or
-authentication is built yet — this phase only proves that the project
-runs and is ready for real development.
-
-Think of it as laying the foundation and turning the lights on before
-any rooms are built.
-
-
-WHAT WAS ACTUALLY DONE
+CATALYX BACKEND — SIMPLE SUMMARY
+==================================
+WHAT IS THIS PROJECT?
 ----------------------
-1. A dedicated Python environment was created.
-   - Tool: Python 3.14's built-in "venv"
-   - Folder: .venv/
-   - Why: keeps this project's libraries separate from the rest of the
-     computer, so versions never clash with other projects.
+Catalyx is a backend server (built with Java + Spring Boot) for an app where
+a business owner can sign up, log in, and set up their business profile.
+Later phases (not built yet) will let them add products and use AI to
+generate a catalogue for their business.
 
-2. All required libraries were installed into that environment:
-   - fastapi          -> the web framework used to build the API
-   - uvicorn          -> the server that runs the FastAPI app
-   - sqlalchemy       -> talks to the database (used in a later phase)
-   - psycopg2-binary  -> lets SQLAlchemy connect to PostgreSQL
-   - python-jose      -> creates and verifies JWT tokens (auth, later)
-   - passlib          -> password hashing helpers (auth, later)
-   - bcrypt           -> the actual hashing algorithm passlib uses
-   - python-multipart -> lets the API accept form data / file uploads
-   The exact versions are frozen in requirements.txt so the setup can
-   be reproduced later or by someone else.
-
-3. The project folder structure was created:
-
-   app-backend/
-   |-- .venv/             (the virtual environment - not committed)
-   |-- .gitignore         (tells git to ignore .venv, caches, .env)
-   |-- requirements.txt   (the exact list of installed packages)
-   |-- summary.txt        (this file)
-   |-- app/
-       |-- __init__.py    (marks "app" as a Python package)
-       |-- main.py        (the application itself)
-
-4. A minimal application was written in app/main.py.
-   It creates a FastAPI app and exposes ONE route:
-
-       GET  /   ->   {"status": "ok",
-                      "message": "catalyx-backend-py is running"}
-
-   This is called a "health-check" route. Its only job is to answer
-   "yes, I'm alive" when something asks. It is the standard way to
-   confirm a web service started correctly.
+Think of it like the "engine room" of the app — it has no visual screens,
+just the logic and database that a mobile/web app would talk to over the
+internet using API calls (like /signup, /login, /business).
 
 
-HOW WE KNOW IT WORKS
+PHASE 1 — PROJECT SETUP AND ENVIRONMENT
+-----------------------------------------
+This phase was about laying the foundation, before writing any real feature.
+
+What we did:
+- Created a new Spring Boot project called "catalyx-backend" using Java 17.
+- Set up the project to talk to a PostgreSQL database (a place to store data
+  permanently, like users, businesses, products).
+- Added the basic building blocks (folders) for how the code will be
+  organized: config, controller, dto, entity, repository, security, service.
+  (Explained in detail in architecture.txt)
+- Created the 6 main "entities" — these are the tables in our database:
+  User, Business, Product, ProductImage, Catalogue, AiJob.
+  These represent the real-world things our app manages.
+- Created "repository" files for each entity — these are helper classes
+  that let our code save/fetch/delete data from the database without
+  writing raw SQL by hand.
+- Wrote the application settings file (application.properties) that tells
+  the app which database to connect to.
+
+In short: Phase 1 = "build the skeleton and connect to the database."
+
+
+PHASE 2 & 3 — AUTHENTICATION & JWT (Login System)
+----------------------------------------------------
+(This was committed as one combined phase called "Authentication & JWT")
+
+This phase is about letting users create an account and log in safely.
+
+What we did:
+- Built a Signup API (/signup): a new user gives their name, email, and
+  password, and we create their account. The password is never stored as
+  plain text — it's scrambled using a one-way encryption method called
+  BCrypt, so even we can't see the real password.
+- Built a Login API (/login): user enters email + password, and if correct,
+  we give them back a "token" — a digital pass (like a wristband at an
+  event) that proves who they are.
+- This digital pass is called a JWT (JSON Web Token). It's a small piece of
+  text that:
+    - Contains the user's identity (email, user ID)
+    - Has an expiry (24 hours by default)
+    - Is signed/sealed with a secret key so nobody can fake or edit it
+- Every time the user calls another API (like creating a business), they
+  attach this token in the request. Our server checks the token to confirm
+  "yes, this is really this user" before allowing the action — this is
+  called being "authenticated."
+- If someone provides a wrong password, an invalid token, or no token at
+  all when required, we return a clean, readable error message (not a
+  scary server crash) — for example "Invalid email or password."
+- We also added Spring Security — a security guard system that decides
+  which pages/APIs are public (like /signup, /login) and which ones
+  require you to be logged in (everything else).
+
+In short: Phase 2/3 = "let people create accounts, log in safely, and
+protect the rest of the app so only logged-in users can use it."
+
+
+PHASE 4 — BUSINESS SETUP MODULE
+-----------------------------------
+Now that users can log in, this phase lets them set up their business.
+
+What we did:
+- Built a "Create Business" API (POST /business): a logged-in user can
+  register their business by giving a name, category (e.g. "Bakery",
+  "Clothing"), logo image link, and brand colors.
+- Built a "Get Business" API (GET /business): a logged-in user can fetch
+  their own business details.
+- Rule: each user can only have ONE business. If they try to create a
+  second one, the app blocks it with a clear error ("A business already
+  exists for this user").
+- The business is always linked to the exact user who is logged in — we
+  use their token to know who they are, so nobody can create or see
+  another person's business.
+
+In short: Phase 4 = "let a logged-in user create and view their own
+business profile."
+
+
+PHASE 5 — PRODUCT MANAGEMENT (Add Products + Upload Photos)
+---------------------------------------------------------------
+Now that a user can log in and set up their business, this phase lets them
+add products to that business, along with photos of each product.
+
+What we did:
+- Built a "Create Product" API (POST /products): a logged-in user can add
+  a new product under their business by giving a name, SKU (product
+  code), price, and description.
+- Along with the product details, the user can also upload one or more
+  photos of the product in the SAME request (this is called a
+  "multipart" request — a mix of text fields and file uploads together).
+- Built a "Get Products" API (GET /products): a logged-in user can fetch
+  the full list of their business's products, each with its photos
+  included.
+- Added a new helper, FileStorageService, whose only job is handling
+  uploaded photos safely:
+    - Rejects empty files.
+    - Only allows real image files (JPEG, PNG, GIF, WEBP) — blocks
+      anything else (like a disguised .exe file) from being uploaded.
+    - Rejects any single photo bigger than 5MB.
+    - Saves each accepted photo to a folder on disk organized by product
+      (uploads/products/<productId>/), with a random, unique file name
+      so two different people's uploads never overwrite each other.
+- Every uploaded photo becomes its own row in the ProductImage table
+  (already designed back in Phase 1), linked to the product it belongs to.
+- Added server-wide limits: no single uploaded file over 5MB, and no
+  request (all files combined) over 25MB — if someone tries to break
+  this, the app now replies with a clean error message ("Uploaded file(s)
+  exceed the maximum allowed size") instead of crashing.
+- A product can only be created under the business that belongs to the
+  logged-in user — same ownership protection pattern as Phase 4's
+  business rule.
+- Small supporting change: added one query that fetches a business's
+  products AND their photos together in a single efficient database
+  call, instead of needing separate lookups.
+
+In short: Phase 5 = "let a logged-in user add products to their business,
+with photo uploads, safely validated and stored."
+
+
+WHAT'S NOT BUILT YET (for context)
+-------------------------------------
+Looking at the database design (entities) already created in Phase 1, the
+following are prepared for but not yet built with actual APIs:
+- Catalogue generation (creating a shareable catalogue/brochure)
+- AI Jobs (background AI tasks, e.g. auto-generating catalogue designs,
+  with a status: PENDING, PROCESSING, DONE, FAILED)
+
+These tables already exist in the database structure, ready for future
+phases to use.
+
+
+QUICK RECAP TABLE
 --------------------
-The server was started with:
-
-    .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8080
-
-and a request was sent to http://127.0.0.1:8080/ .
-
-Result:
-    HTTP 200 OK
-    {"status":"ok","message":"catalyx-backend-py is running"}
-
-The server logs showed a clean startup ("Application startup complete")
-and it shut down without errors. Phase 1 is verified.
-
-
-HOW TO RUN IT YOURSELF
-----------------------
-From the app-backend folder:
-
-    source .venv/bin/activate
-    uvicorn app.main:app --port 8080 --reload
-
-Then open http://127.0.0.1:8080/ in a browser, or run:
-
-    curl http://127.0.0.1:8080/
-
-The interactive API docs are also available at:
-
-    http://127.0.0.1:8080/docs
-
-
-STATUS:  COMPLETE
-
-
-========================================
- PHASE 2 — DATABASE MODELS & CONNECTION
-========================================
-
-WHAT IS PHASE 2?
-----------------
-Phase 1 turned the lights on: a bare FastAPI app that could say
-"I'm alive". Phase 2 gives that app a memory.
-
-The goal of this phase is to connect the backend to a real
-PostgreSQL database and describe, in Python, every table the
-project will store data in. After this phase the app knows HOW
-to talk to the database and WHAT its data looks like. It still
-has no real endpoints — that comes next.
-
-Think of it as installing the filing cabinets and labelling
-every drawer before anyone starts filing papers.
-
-
-WHAT WAS ACTUALLY DONE
-----------------------
-1. A database connection was set up (app/database.py).
-   - engine        -> the actual pipe to PostgreSQL
-   - SessionLocal  -> hands out short-lived "conversations" with the DB
-   - Base          -> the parent class every table model inherits from
-   - get_db()      -> a helper FastAPI will use to give each request
-                      its own database session and clean it up after
-   The database it connects to is called "catalyx_db". The address
-   can be changed with a DATABASE_URL environment variable.
-
-2. Six tables were described as Python classes (app/models.py):
-
-   - User          people who log in
-                   (id, email [unique], password, name, created_at)
-
-   - Business       a company owned by a user
-                   (id, user_id, name, category, logo_url,
-                    brand_colors, created_at)
-
-   - Product        an item that belongs to a business
-                   (id, business_id, name, sku, price,
-                    description, created_at)
-
-   - ProductImage   a photo that belongs to a product
-                   (id, product_id, image_url, uploaded_at)
-
-   - AiJob          a background AI task for a product
-                   (id, product_id, status [default "PENDING"],
-                    result, created_at, updated_at)
-
-   - Catalogue      the finished output of an AiJob for a business
-                   (id, ai_job_id, business_id, template_name,
-                    content_url, created_at)
-
-   The tables are linked with foreign keys (e.g. a Product points
-   to its Business, a ProductImage points to its Product). Product
-   and ProductImage also have a two-way relationship: from a
-   product you can read product.images, and deleting a product
-   deletes its images automatically.
-
-3. Automatic table creation was wired up (app/main.py).
-   On startup the app now runs Base.metadata.create_all(), which
-   creates any of the six tables that don't already exist in
-   catalyx_db. No manual SQL needed.
-
-
-HOW WE KNOW IT WORKS
---------------------
-The app was started and it:
-   - connected to catalyx_db with no errors
-   - created all six tables (users, businesses, products,
-     product_images, ai_jobs, catalogues)
-   - set up the foreign keys correctly
-   - logged "Application startup complete"
-   - still answered GET / with HTTP 200 and
-     {"status":"ok","message":"catalyx-backend-py is running"}
-
-
-FILES ADDED / CHANGED
----------------------
-   app/database.py   (new)  connection, session, get_db()
-   app/models.py     (new)  the six table models
-   app/main.py       (edit) runs create_all() on startup
-
-
-STATUS:  COMPLETE
-
-
-========================================
- PHASE 3 — AUTHENTICATION & JWT
-========================================
-
-WHAT IS PHASE 3?
-----------------
-
-
-The goal of this phase is to let real people create an account
-and sign in. When someone signs up or logs in, the backend hands
-them a "token" — a small signed pass they show on future requests
-to prove who they are. Passwords are never stored as plain text;
-they are scrambled with a one-way algorithm so that even someone
-who steals the database cannot read them.
-
-Think of it as issuing membership cards: you register once, you
-get a card, and from then on you flash the card instead of
-re-proving your identity every time.
-
-
-KEY IDEAS IN PLAIN ENGLISH
---------------------------
-- Password hashing
-  A password is run through "bcrypt", a one-way scrambler. The
-  scrambled result is what gets saved. You can check whether a
-  typed password matches the saved scramble, but you can never
-  turn the scramble back into the original password.
-
-- JWT (JSON Web Token)
-  A string the server gives you after a successful signup/login.
-  It contains your user id and email plus an expiry time, and it
-  is digitally signed by the server. Anyone can read it, but
-  nobody can forge or tamper with it without the server's secret
-  key. It expires after a set time (60 minutes by default).
-
-- Secret key from the environment
-  The signing key and the token lifetime are read from environment
-  variables (JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRE_MINUTES).
-  If they are not set, safe development-only defaults are used, so
-  the app still runs on a fresh machine with zero configuration.
-  In production you set a real secret and it is never committed.
-
-
-WHAT WAS ACTUALLY DONE
-----------------------
-1. Auth helper module was created (app/auth.py).
-   - hash_password()        scrambles a new password with bcrypt
-   - verify_password()      checks a typed password against the hash
-   - create_access_token()  builds and signs a JWT (adds issued-at
-                            and expiry timestamps)
-   - decode_access_token()  verifies a JWT and returns its contents,
-                            or nothing if it is invalid or expired
-   Passwords longer than bcrypt's 72-byte limit are trimmed
-   consistently so hashing and checking always agree.
-
-2. Request/response shapes were defined (app/schemas.py).
-   - SignupRequest   email, password, name
-   - LoginRequest    email, password
-   - AuthResponse    token, tokenType, userId, email, name
-   The email field is checked for a sane basic shape and stored in
-   lowercase. The password must be at least 8 characters.
-
-3. Two new endpoints were added (app/main.py):
-
-   POST /signup
-     - rejects passwords shorter than 8 characters
-     - rejects an email that is already registered
-     - hashes the password and saves the new user
-     - returns HTTP 201 with a fresh token and the user's details:
-         { token, tokenType: "bearer", userId, email, name }
-
-   POST /login
-     - looks up the user by email
-     - checks the typed password against the stored hash
-     - on success returns HTTP 200 with a brand-new token in the
-       exact same shape as /signup
-     - on any failure (wrong password OR unknown email) returns
-       one generic message so attackers cannot tell which emails
-       exist
-
-4. Clean error responses were wired up.
-   Instead of long technical stack traces, bad input now returns
-   tidy JSON:
-     - 422  { "detail": "Validation failed",
-              "errors": [ { "field": ..., "message": ... } ] }
-     - 409  { "detail": "An account with this email already exists" }
-     - 401  { "detail": "Invalid email or password" }
-
-For SignUp example 
-
-{
-  "email": "test@test.com",
-  "password": "test1234",
-  "name": "Test User"
-}
-
-for login
-
-{
-  "email": "test@test.com",
-  "password": "test1234"
-}
-
-A NOTE ON LIBRARIES
--------------------
-The project pins passlib and bcrypt together, but those two exact
-versions do not work as a pair (passlib's bcrypt bridge fails to
-load). To keep the pinned versions and still ship working hashing,
-app/auth.py calls the bcrypt library directly. Behaviour is the
-same: bcrypt-hashed passwords, no plain text anywhere.
-
-Email addresses are validated with a small built-in check rather
-than the separate "email-validator" package, which is not installed.
-
-
-HOW WE KNOW IT WORKS
---------------------
-The signup and login logic was exercised end to end against a
-throwaway in-memory database. All of these behaved correctly:
-   - signup succeeds and returns a valid, decodable token
-   - signing up again with the same email is rejected (409)
-   - a password under 8 characters is rejected (422)
-   - a malformed email is rejected (422)
-   - login with the right password succeeds and returns a new token
-   - login with the wrong password is rejected (401)
-   - login with an unknown email is rejected (401, same message)
-   - a tampered/garbage token is refused by the decoder
-   - very long passwords hash and verify without error
-
-
-HOW TO TRY IT YOURSELF
-----------------------
-Start the server, then:
-
-   curl -X POST http://127.0.0.1:8080/signup \
-     -H "Content-Type: application/json" \
-     -d '{"email":"me@example.com","password":"secret123","name":"Me"}'
-
-   curl -X POST http://127.0.0.1:8080/login \
-     -H "Content-Type: application/json" \
-     -d '{"email":"me@example.com","password":"secret123"}'
-
-Both return a JSON body containing a "token" you can use later.
-The interactive docs at http://127.0.0.1:8080/docs list both
-new endpoints.
-
-
-FILES ADDED / CHANGED
----------------------
-   app/auth.py       (new)  hashing + JWT create/decode helpers
-   app/schemas.py    (new)  SignupRequest, LoginRequest, AuthResponse
-   app/main.py       (edit) /signup and /login routes + JSON error
-                            handler for validation failures
-
-
-STATUS:  COMPLETE
-
-
-========================================
- PHASE 4 — BUSINESS SETUP MODULE
- (WITH JWT PROTECTION)
-========================================
-
-WHAT IS PHASE 4?
-----------------
-Phase 3 handed out membership cards (JWT tokens). Phase 4 is the
-first place those cards are actually checked at the door.
-
-The goal of this phase is to let a signed-in user set up their
-own business and read it back — and to make sure a user can only
-ever see or touch their OWN business, never anyone else's. Every
-request to these new routes must carry a valid token; no token,
-no entry.
-
-Think of it as: you show your membership card, and the system
-opens exactly one locker — yours — and no one else's.
-
-
-KEY IDEAS IN PLAIN ENGLISH
---------------------------
-- Protected route
-  An endpoint that refuses to do anything until it has confirmed
-  who is calling. It does this by reading the token off the
-  request and turning it back into a real user.
-
-- The "get_current_user" dependency
-  A single reusable piece of code that every protected route
-  leans on. It looks at the "Authorization" header, expects it to
-  say "Bearer <token>", verifies the token, loads that user from
-  the database, and hands it to the route. If anything is wrong it
-  stops the request with a 401 and a clear reason.
-
-- "Only your own data"
-  The route never trusts the caller to say which business is
-  theirs. It takes the user id straight from the verified token
-  and asks the database only for the business with that owner.
-  There is no way to pass someone else's id in and get their data.
-
-
-WHAT WAS ACTUALLY DONE
-----------------------
-1. Auth dependency was created (app/dependencies.py).
-   get_current_user():
-   - reads the "Authorization" request header
-   - requires the "Bearer <token>" format
-   - verifies and decodes the token (reusing Phase 3's
-     decode_access_token)
-   - loads the matching User from the database
-   - returns that User object to the route
-   Each failure has its own plain-English 401 message:
-     - "Authorization header is missing"
-     - "Authorization header must be in the form 'Bearer <token>'"
-     - "Token is invalid or has expired"
-     - "Token is missing the subject claim"
-     - "Token subject is malformed"
-     - "Token refers to a user that no longer exists"
-
-2. Request/response shapes were added (app/schemas.py).
-   - BusinessRequest    name (required), category (required),
-                        logo_url (optional), brand_colors (optional)
-   - BusinessResponse   id, name, category, logo_url, brand_colors
-                        (note: the owner's user_id is deliberately
-                        NOT sent back to the client)
-
-3. Two protected endpoints were added (app/main.py):
-
-   POST /business
-     - requires a valid token
-     - creates a Business row owned by the caller
-       (user_id is taken from the token, never from the body,
-        so you cannot create a business "for" someone else)
-     - returns HTTP 201 with the new business:
-         { id, name, category, logo_url, brand_colors }
-
-   GET /business
-     - requires a valid token
-     - looks up the business whose owner is the caller
-     - returns it with HTTP 200, or
-     - returns HTTP 404 { "detail": "No business found for this
-       account" } if the caller has not set one up yet
-     - it can only ever match the caller's own row
-
-REQUEST EXAMPLES
-----------------
-Every call must include the token from signup/login:
-
-   Authorization: Bearer <your-token>
-
-Create a business:
-
-   {
-     "name": "Acme Coffee",
-     "category": "Food & Beverage",
-     "logo_url": "https://example.com/logo.png",
-     "brand_colors": "#6F4E37,#FFF8E7"
-   }
-
-(logo_url and brand_colors can be left out.)
-
-
-HOW WE KNOW IT WORKS
---------------------
-The routes were exercised end to end against a throwaway SQLite
-database with two separate users, A and B. All of these behaved
-correctly:
-   - no Authorization header             -> 401 (header missing)
-   - header not in "Bearer <token>" form -> 401 (bad format)
-   - garbage token                       -> 401 (invalid/expired)
-   - expired token                       -> 401 (invalid/expired)
-   - user A, GET before creating         -> 404 (none yet)
-   - user A, POST /business              -> 201, business created
-   - user A, POST with "name" missing    -> 422 (validation)
-   - user A, GET /business               -> 200, returns A's business
-   - user B, GET /business               -> 404 (B has none; does
-                                            NOT see A's business)
-   - user B, POST /business              -> 201, B's own business
-   - user B, GET /business               -> 200, returns B's business
-   - user A, GET again                   -> 200, still only A's own
-
-The cross-user checks are the important part: B could never read
-or affect A's business, and vice versa.
-
-
-A NOTE ON TESTING
------------------
-This environment's virtualenv does not include "httpx", so
-FastAPI's usual TestClient cannot be imported, and there is no
-running PostgreSQL here. The verification above was therefore run
-by calling the app directly with a temporary SQLite database. The
-application itself is unchanged and still targets PostgreSQL via
-DATABASE_URL in normal use.
-
-
-HOW TO TRY IT YOURSELF
-----------------------
-1. Sign up or log in (Phase 3) and copy the "token" from the
-   response.
-2. Create your business:
-
-   curl -X POST http://127.0.0.1:8080/business \
-     -H "Authorization: Bearer <your-token>" \
-     -H "Content-Type: application/json" \
-     -d '{"name":"Acme Coffee","category":"Food & Beverage"}'
-
-3. Read it back:
-
-   curl http://127.0.0.1:8080/business \
-     -H "Authorization: Bearer <your-token>"
-
-Both new endpoints also appear in the interactive docs at
-http://127.0.0.1:8080/docs, each marked as requiring
-authorization.
-
-
-FILES ADDED / CHANGED
----------------------
-   app/dependencies.py  (new)  get_current_user() auth dependency
-   app/schemas.py       (edit) BusinessRequest, BusinessResponse
-   app/main.py          (edit) POST /business and GET /business,
-                               both protected by get_current_user()
-
-
-STATUS:  COMPLETE
+Phase 1        -> Set up project + database + skeleton folders + tables
+Phase 2/3      -> Signup, Login, JWT tokens, password security
+Phase 4        -> Create & view a business profile (one per user)
+Phase 5        -> Add products + upload product photos (with validation)
+Not built yet  -> Catalogues, AI jobs

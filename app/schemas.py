@@ -56,3 +56,22 @@ class BusinessResponse(BaseModel):
     brand_colors: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class ProductImageResponse(BaseModel):
+    id: int
+    image_url: str
+
+    model_config = {"from_attributes": True}
+
+
+class ProductResponse(BaseModel):
+    id: int
+    business_id: int
+    name: str
+    sku: str
+    price: float
+    description: str | None = None
+    images: list[ProductImageResponse] = []
+
+    model_config = {"from_attributes": True}

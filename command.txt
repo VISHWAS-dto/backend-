@@ -1,0 +1,173 @@
+# Catalyx Backend (Python/FastAPI) — Setup & Verification Commands (Phase 1-5)
+
+This is a complete, copy-pasteable command reference for anyone picking up this project. Run these in order from the project root folder.
+
+---
+
+## Prerequisites (one-time setup)
+
+```bash
+# Check Python is installed (need 3.8+)
+python3 --version
+
+# Create and activate a virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install all required packages
+pip install fastapi uvicorn sqlalchemy psycopg2-binary python-jose passlib bcrypt python-multipart
+pip freeze > requirements.txt
+```
+
+## Database Setup
+
+```bash
+# Create the Postgres database (only needed once)
+psql -U postgres -c "CREATE DATABASE catalyx_db_py;"
+
+# Verify it exists
+psql -U postgres -l
+```
+
+**Note:** the database is named `catalyx_db_py`, not `catalyx_db` — check `app/database.py` for the exact `DATABASE_URL` if unsure.
+
+## Starting the Server
+
+```bash
+# Make sure nothing else is already using port 8080 first
+lsof -i :8080
+
+# If something is running, stop it:
+pkill -f uvicorn
+
+# Start the server (run this in its own terminal, leave it running)
+uvicorn app.main:app --reload --port 8080
+```
+
+**Confirm it started correctly:** look for `Uvicorn running on http://127.0.0.1:8080` with no red `ERROR` lines.
+
+**Interactive API docs:** once running, visit `http://localhost:8080/docs` in a browser to see and test every endpoint visually.
+
+---
+
+## Phase 1 — Health Check
+
+```bash
+curl http://localhost:8080/
+```
+**Expected:** `{"message":"Catalyx backend is running"}`
+
+---
+
+## Phase 2 — Database Tables
+
+```bash
+psql -U postgres -d catalyx_db_py -c "\dt"
+```
+**Expected:** lists 6 tables — `users`, `businesses`, `products`, `product_images`, `ai_jobs`, `catalogues`
+
+---
+
+## Phase 3 — Authentication (Signup & Login)
+
+```bash
+# Sign up a test user
+curl -s -X POST http://localhost:8080/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@test.com","password":"test1234","name":"Test User"}'
+
+# Log in with the same user
+curl -s -X POST http://localhost:8080/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@test.com","password":"test1234"}'
+```
+**Expected:** both return JSON with a `token`, `tokenType`, `userId`, `email`, `name`.
+
+---
+
+## Phase 4 — Business Setup (JWT-Protected)
+
+```bash
+# Log in and save the token for reuse
+LOGIN_RESPONSE=$(curl -s -X POST http://localhost:8080/login -H "Content-Type: application/json" -d '{"email":"test@test.com","password":"test1234"}')
+TOKEN=$(echo $LOGIN_RESPONSE | sed -E 's/.*"token":"([^"]+)".*/\1/')
+echo "Token: $TOKEN"
+
+# Create a business
+curl -s -X POST http://localhost:8080/business \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"My Shop","category":"Retail"}'
+
+# Fetch the business back
+curl -s -X GET http://localhost:8080/business -H "Authorization: Bearer $TOKEN"
+
+# Security check: confirm it's rejected WITHOUT a token
+curl -s -X GET http://localhost:8080/business
+```
+**Expected:** POST/GET (with token) return the business object; GET without a token returns `{"detail":"Authorization header is missing"}` with a 401 status.
+
+---
+
+## Phase 5 — Product Upload (Multi-Image)
+
+```bash
+# Create a real test image
+screencapture -x ~/Desktop/test_product.jpg
+sips -Z 800 ~/Desktop/test_product.jpg
+ls -la ~/Desktop/test_product.jpg
+
+# Log in and grab a fresh token
+LOGIN_RESPONSE=$(curl -s -X POST http://localhost:8080/login -H "Content-Type: application/json" -d '{"email":"test@test.com","password":"test1234"}')
+TOKEN=$(echo $LOGIN_RESPONSE | sed -E 's/.*"token":"([^"]+)".*/\1/')
+
+# Upload a product with an image
+curl -s -X POST http://localhost:8080/products \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "name=Blue Ceramic Mug" \
+  -F "sku=MUG-001" \
+  -F "price=299" \
+  -F "description=Handmade ceramic mug" \
+  -F "images=@/Users/vishwas/Desktop/test_product.jpg"
+
+# Fetch all products
+curl -s -X GET http://localhost:8080/products -H "Authorization: Bearer $TOKEN"
+
+# Validation check 1: reject oversized files (>5MB)
+screencapture -x ~/Desktop/big_test.jpg
+curl -s -X POST http://localhost:8080/products \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "name=Oversized Test" \
+  -F "sku=TEST-999" \
+  -F "price=100" \
+  -F "images=@/Users/vishwas/Desktop/big_test.jpg"
+
+# Validation check 2: reject non-image file types
+echo "this is not an image" > ~/Desktop/fake.txt
+curl -s -X POST http://localhost:8080/products \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "name=Bad File Test" \
+  -F "sku=TEST-998" \
+  -F "price=100" \
+  -F "images=@/Users/vishwas/Desktop/fake.txt"
+```
+**Expected:**
+- Product upload returns JSON with `id`, `business_id`, product metadata, and an `images` array with a saved UUID-named file path/URL
+- GET returns the full product list
+- Oversized file returns a clean 400 error naming the file, its size, and the limit
+- Wrong file type returns a clean 400 error rejecting the file type
+
+---
+
+## Quick Reference: Notes for Whoever Picks This Up
+
+- **Database name:** `catalyx_db_py` (not `catalyx_db` — that name belongs to an earlier, unrelated Java version of this project)
+- **Server port:** 8080
+- **Test account:** `test@test.com` / `test1234`
+- **Always run the server in its own terminal** and test from a second terminal — closing the server terminal stops the app
+- **Interactive docs:** `http://localhost:8080/docs` — useful for exploring endpoints without memorizing curl syntax
+- **If port 8080 is already in use:** run `lsof -i :8080` to find the process, then `kill -9 <PID>`, or `pkill -f uvicorn` to stop all uvicorn processes at once
+
+---
+
+**Status: Phases 1-5 confirmed fully working.** Next up: Phase 6 (AI image validation).
