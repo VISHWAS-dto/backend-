@@ -90,5 +90,88 @@ The interactive API docs are also available at:
 
 
 STATUS:  COMPLETE
-NEXT:    Phase 2 will build on this foundation (database models,
-         configuration, and the first real endpoints).
+
+
+========================================
+ PHASE 2 — DATABASE MODELS & CONNECTION
+========================================
+
+WHAT IS PHASE 2?
+----------------
+Phase 1 turned the lights on: a bare FastAPI app that could say
+"I'm alive". Phase 2 gives that app a memory.
+
+The goal of this phase is to connect the backend to a real
+PostgreSQL database and describe, in Python, every table the
+project will store data in. After this phase the app knows HOW
+to talk to the database and WHAT its data looks like. It still
+has no real endpoints — that comes next.
+
+Think of it as installing the filing cabinets and labelling
+every drawer before anyone starts filing papers.
+
+
+WHAT WAS ACTUALLY DONE
+----------------------
+1. A database connection was set up (app/database.py).
+   - engine        -> the actual pipe to PostgreSQL
+   - SessionLocal  -> hands out short-lived "conversations" with the DB
+   - Base          -> the parent class every table model inherits from
+   - get_db()      -> a helper FastAPI will use to give each request
+                      its own database session and clean it up after
+   The database it connects to is called "catalyx_db". The address
+   can be changed with a DATABASE_URL environment variable.
+
+2. Six tables were described as Python classes (app/models.py):
+
+   - User          people who log in
+                   (id, email [unique], password, name, created_at)
+
+   - Business       a company owned by a user
+                   (id, user_id, name, category, logo_url,
+                    brand_colors, created_at)
+
+   - Product        an item that belongs to a business
+                   (id, business_id, name, sku, price,
+                    description, created_at)
+
+   - ProductImage   a photo that belongs to a product
+                   (id, product_id, image_url, uploaded_at)
+
+   - AiJob          a background AI task for a product
+                   (id, product_id, status [default "PENDING"],
+                    result, created_at, updated_at)
+
+   - Catalogue      the finished output of an AiJob for a business
+                   (id, ai_job_id, business_id, template_name,
+                    content_url, created_at)
+
+   The tables are linked with foreign keys (e.g. a Product points
+   to its Business, a ProductImage points to its Product). Product
+   and ProductImage also have a two-way relationship: from a
+   product you can read product.images, and deleting a product
+   deletes its images automatically.
+
+3. Automatic table creation was wired up (app/main.py).
+   On startup the app now runs Base.metadata.create_all(), which
+   creates any of the six tables that don't already exist in
+   catalyx_db. No manual SQL needed.
+
+
+HOW WE KNOW IT WORKS
+--------------------
+The app was started and it:
+   - connected to catalyx_db with no errors
+   - created all six tables (users, businesses, products,
+     product_images, ai_jobs, catalogues)
+   - set up the foreign keys correctly
+   - logged "Application startup complete"
+   - still answered GET / with HTTP 200 and
+     {"status":"ok","message":"catalyx-backend-py is running"}
+
+
+FILES ADDED / CHANGED
+---------------------
+   app/database.py   (new)  connection, session, get_db()
+   app/models.py     (new)  the six table models
+   app/main.py       (edit) runs create_all() on startup
