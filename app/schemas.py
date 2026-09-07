@@ -39,3 +39,20 @@ class AuthResponse(BaseModel):
     userId: int
     email: str
     name: str
+
+
+class BusinessRequest(BaseModel):
+    name: str = Field(min_length=1)
+    category: str = Field(min_length=1)
+    logo_url: str | None = None
+    brand_colors: str | None = None
+
+
+class BusinessResponse(BaseModel):
+    id: int
+    name: str
+    category: str
+    logo_url: str | None = None
+    brand_colors: str | None = None
+
+    model_config = {"from_attributes": True}

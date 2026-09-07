@@ -6,7 +6,14 @@ from sqlalchemy.orm import Session
 from app import models  # noqa: F401  (ensures models are registered on Base.metadata)
 from app.auth import create_access_token, hash_password, verify_password
 from app.database import Base, engine, get_db
-from app.schemas import AuthResponse, LoginRequest, SignupRequest
+from app.dependencies import get_current_user
+from app.schemas import (
+    AuthResponse,
+    BusinessRequest,
+    BusinessResponse,
+    LoginRequest,
+    SignupRequest,
+)
 
 # Create any missing tables on startup.
 Base.metadata.create_all(bind=engine)
@@ -68,6 +75,45 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
     db.refresh(user)
 
     return _auth_response(user)
+
+
+@app.post("/business", response_model=BusinessResponse, status_code=201)
+def create_business(
+    payload: BusinessRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a business owned by the authenticated user."""
+    business = models.Business(
+        user_id=current_user.id,
+        name=payload.name,
+        category=payload.category,
+        logo_url=payload.logo_url,
+        brand_colors=payload.brand_colors,
+    )
+    db.add(business)
+    db.commit()
+    db.refresh(business)
+    return business
+
+
+@app.get("/business", response_model=BusinessResponse)
+def get_business(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the authenticated user's own business, or 404 if they have none."""
+    business = (
+        db.query(models.Business)
+        .filter(models.Business.user_id == current_user.id)
+        .first()
+    )
+    if business is None:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": "No business found for this account"},
+        )
+    return business
 
 
 @app.post("/login", response_model=AuthResponse)
