@@ -1,12 +1,16 @@
+from pathlib import Path
+
 from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from app import models  # noqa: F401  (ensures models are registered on Base.metadata)
 from app.auth import create_access_token, hash_password, verify_password
 from app.database import Base, engine, get_db
 from app.dependencies import get_current_user
+from app.products import router as products_router
 from app.schemas import (
     AuthResponse,
     BusinessRequest,
@@ -19,6 +23,13 @@ from app.schemas import (
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="catalyx-backend-py")
+
+# Serve uploaded files (e.g. product images) from the local "uploads" directory.
+_UPLOADS_DIR = Path("uploads")
+_UPLOADS_DIR.mkdir(exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=_UPLOADS_DIR), name="uploads")
+
+app.include_router(products_router)
 
 
 @app.exception_handler(RequestValidationError)
