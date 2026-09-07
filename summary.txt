@@ -336,3 +336,170 @@ FILES ADDED / CHANGED
 
 
 STATUS:  COMPLETE
+
+
+========================================
+ PHASE 4 — BUSINESS SETUP MODULE
+ (WITH JWT PROTECTION)
+========================================
+
+WHAT IS PHASE 4?
+----------------
+Phase 3 handed out membership cards (JWT tokens). Phase 4 is the
+first place those cards are actually checked at the door.
+
+The goal of this phase is to let a signed-in user set up their
+own business and read it back — and to make sure a user can only
+ever see or touch their OWN business, never anyone else's. Every
+request to these new routes must carry a valid token; no token,
+no entry.
+
+Think of it as: you show your membership card, and the system
+opens exactly one locker — yours — and no one else's.
+
+
+KEY IDEAS IN PLAIN ENGLISH
+--------------------------
+- Protected route
+  An endpoint that refuses to do anything until it has confirmed
+  who is calling. It does this by reading the token off the
+  request and turning it back into a real user.
+
+- The "get_current_user" dependency
+  A single reusable piece of code that every protected route
+  leans on. It looks at the "Authorization" header, expects it to
+  say "Bearer <token>", verifies the token, loads that user from
+  the database, and hands it to the route. If anything is wrong it
+  stops the request with a 401 and a clear reason.
+
+- "Only your own data"
+  The route never trusts the caller to say which business is
+  theirs. It takes the user id straight from the verified token
+  and asks the database only for the business with that owner.
+  There is no way to pass someone else's id in and get their data.
+
+
+WHAT WAS ACTUALLY DONE
+----------------------
+1. Auth dependency was created (app/dependencies.py).
+   get_current_user():
+   - reads the "Authorization" request header
+   - requires the "Bearer <token>" format
+   - verifies and decodes the token (reusing Phase 3's
+     decode_access_token)
+   - loads the matching User from the database
+   - returns that User object to the route
+   Each failure has its own plain-English 401 message:
+     - "Authorization header is missing"
+     - "Authorization header must be in the form 'Bearer <token>'"
+     - "Token is invalid or has expired"
+     - "Token is missing the subject claim"
+     - "Token subject is malformed"
+     - "Token refers to a user that no longer exists"
+
+2. Request/response shapes were added (app/schemas.py).
+   - BusinessRequest    name (required), category (required),
+                        logo_url (optional), brand_colors (optional)
+   - BusinessResponse   id, name, category, logo_url, brand_colors
+                        (note: the owner's user_id is deliberately
+                        NOT sent back to the client)
+
+3. Two protected endpoints were added (app/main.py):
+
+   POST /business
+     - requires a valid token
+     - creates a Business row owned by the caller
+       (user_id is taken from the token, never from the body,
+        so you cannot create a business "for" someone else)
+     - returns HTTP 201 with the new business:
+         { id, name, category, logo_url, brand_colors }
+
+   GET /business
+     - requires a valid token
+     - looks up the business whose owner is the caller
+     - returns it with HTTP 200, or
+     - returns HTTP 404 { "detail": "No business found for this
+       account" } if the caller has not set one up yet
+     - it can only ever match the caller's own row
+
+REQUEST EXAMPLES
+----------------
+Every call must include the token from signup/login:
+
+   Authorization: Bearer <your-token>
+
+Create a business:
+
+   {
+     "name": "Acme Coffee",
+     "category": "Food & Beverage",
+     "logo_url": "https://example.com/logo.png",
+     "brand_colors": "#6F4E37,#FFF8E7"
+   }
+
+(logo_url and brand_colors can be left out.)
+
+
+HOW WE KNOW IT WORKS
+--------------------
+The routes were exercised end to end against a throwaway SQLite
+database with two separate users, A and B. All of these behaved
+correctly:
+   - no Authorization header             -> 401 (header missing)
+   - header not in "Bearer <token>" form -> 401 (bad format)
+   - garbage token                       -> 401 (invalid/expired)
+   - expired token                       -> 401 (invalid/expired)
+   - user A, GET before creating         -> 404 (none yet)
+   - user A, POST /business              -> 201, business created
+   - user A, POST with "name" missing    -> 422 (validation)
+   - user A, GET /business               -> 200, returns A's business
+   - user B, GET /business               -> 404 (B has none; does
+                                            NOT see A's business)
+   - user B, POST /business              -> 201, B's own business
+   - user B, GET /business               -> 200, returns B's business
+   - user A, GET again                   -> 200, still only A's own
+
+The cross-user checks are the important part: B could never read
+or affect A's business, and vice versa.
+
+
+A NOTE ON TESTING
+-----------------
+This environment's virtualenv does not include "httpx", so
+FastAPI's usual TestClient cannot be imported, and there is no
+running PostgreSQL here. The verification above was therefore run
+by calling the app directly with a temporary SQLite database. The
+application itself is unchanged and still targets PostgreSQL via
+DATABASE_URL in normal use.
+
+
+HOW TO TRY IT YOURSELF
+----------------------
+1. Sign up or log in (Phase 3) and copy the "token" from the
+   response.
+2. Create your business:
+
+   curl -X POST http://127.0.0.1:8080/business \
+     -H "Authorization: Bearer <your-token>" \
+     -H "Content-Type: application/json" \
+     -d '{"name":"Acme Coffee","category":"Food & Beverage"}'
+
+3. Read it back:
+
+   curl http://127.0.0.1:8080/business \
+     -H "Authorization: Bearer <your-token>"
+
+Both new endpoints also appear in the interactive docs at
+http://127.0.0.1:8080/docs, each marked as requiring
+authorization.
+
+
+FILES ADDED / CHANGED
+---------------------
+   app/dependencies.py  (new)  get_current_user() auth dependency
+   app/schemas.py       (edit) BusinessRequest, BusinessResponse
+   app/main.py          (edit) POST /business and GET /business,
+                               both protected by get_current_user()
+
+
+STATUS:  COMPLETE
