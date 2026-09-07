@@ -1,0 +1,94 @@
+========================================
+ PHASE 1 — PROJECT SETUP & ENVIRONMENT
+========================================
+
+WHAT IS PHASE 1?
+----------------
+Phase 1 is the starting point of the "catalyx-backend-py" project.
+The goal of this phase is simple: get a working Python backend skeleton
+running on the machine, with all the tools and libraries it will need
+later already installed. Nothing about business logic, databases, or
+authentication is built yet — this phase only proves that the project
+runs and is ready for real development.
+
+Think of it as laying the foundation and turning the lights on before
+any rooms are built.
+
+
+WHAT WAS ACTUALLY DONE
+----------------------
+1. A dedicated Python environment was created.
+   - Tool: Python 3.14's built-in "venv"
+   - Folder: .venv/
+   - Why: keeps this project's libraries separate from the rest of the
+     computer, so versions never clash with other projects.
+
+2. All required libraries were installed into that environment:
+   - fastapi          -> the web framework used to build the API
+   - uvicorn          -> the server that runs the FastAPI app
+   - sqlalchemy       -> talks to the database (used in a later phase)
+   - psycopg2-binary  -> lets SQLAlchemy connect to PostgreSQL
+   - python-jose      -> creates and verifies JWT tokens (auth, later)
+   - passlib          -> password hashing helpers (auth, later)
+   - bcrypt           -> the actual hashing algorithm passlib uses
+   - python-multipart -> lets the API accept form data / file uploads
+   The exact versions are frozen in requirements.txt so the setup can
+   be reproduced later or by someone else.
+
+3. The project folder structure was created:
+
+   app-backend/
+   |-- .venv/             (the virtual environment - not committed)
+   |-- .gitignore         (tells git to ignore .venv, caches, .env)
+   |-- requirements.txt   (the exact list of installed packages)
+   |-- summary.txt        (this file)
+   |-- app/
+       |-- __init__.py    (marks "app" as a Python package)
+       |-- main.py        (the application itself)
+
+4. A minimal application was written in app/main.py.
+   It creates a FastAPI app and exposes ONE route:
+
+       GET  /   ->   {"status": "ok",
+                      "message": "catalyx-backend-py is running"}
+
+   This is called a "health-check" route. Its only job is to answer
+   "yes, I'm alive" when something asks. It is the standard way to
+   confirm a web service started correctly.
+
+
+HOW WE KNOW IT WORKS
+--------------------
+The server was started with:
+
+    .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8080
+
+and a request was sent to http://127.0.0.1:8080/ .
+
+Result:
+    HTTP 200 OK
+    {"status":"ok","message":"catalyx-backend-py is running"}
+
+The server logs showed a clean startup ("Application startup complete")
+and it shut down without errors. Phase 1 is verified.
+
+
+HOW TO RUN IT YOURSELF
+----------------------
+From the app-backend folder:
+
+    source .venv/bin/activate
+    uvicorn app.main:app --port 8080 --reload
+
+Then open http://127.0.0.1:8080/ in a browser, or run:
+
+    curl http://127.0.0.1:8080/
+
+The interactive API docs are also available at:
+
+    http://127.0.0.1:8080/docs
+
+
+STATUS:  COMPLETE
+NEXT:    Phase 2 will build on this foundation (database models,
+         configuration, and the first real endpoints).
