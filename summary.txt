@@ -175,3 +175,164 @@ FILES ADDED / CHANGED
    app/database.py   (new)  connection, session, get_db()
    app/models.py     (new)  the six table models
    app/main.py       (edit) runs create_all() on startup
+
+
+STATUS:  COMPLETE
+
+
+========================================
+ PHASE 3 — AUTHENTICATION & JWT
+========================================
+
+WHAT IS PHASE 3?
+----------------
+
+
+The goal of this phase is to let real people create an account
+and sign in. When someone signs up or logs in, the backend hands
+them a "token" — a small signed pass they show on future requests
+to prove who they are. Passwords are never stored as plain text;
+they are scrambled with a one-way algorithm so that even someone
+who steals the database cannot read them.
+
+Think of it as issuing membership cards: you register once, you
+get a card, and from then on you flash the card instead of
+re-proving your identity every time.
+
+
+KEY IDEAS IN PLAIN ENGLISH
+--------------------------
+- Password hashing
+  A password is run through "bcrypt", a one-way scrambler. The
+  scrambled result is what gets saved. You can check whether a
+  typed password matches the saved scramble, but you can never
+  turn the scramble back into the original password.
+
+- JWT (JSON Web Token)
+  A string the server gives you after a successful signup/login.
+  It contains your user id and email plus an expiry time, and it
+  is digitally signed by the server. Anyone can read it, but
+  nobody can forge or tamper with it without the server's secret
+  key. It expires after a set time (60 minutes by default).
+
+- Secret key from the environment
+  The signing key and the token lifetime are read from environment
+  variables (JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRE_MINUTES).
+  If they are not set, safe development-only defaults are used, so
+  the app still runs on a fresh machine with zero configuration.
+  In production you set a real secret and it is never committed.
+
+
+WHAT WAS ACTUALLY DONE
+----------------------
+1. Auth helper module was created (app/auth.py).
+   - hash_password()        scrambles a new password with bcrypt
+   - verify_password()      checks a typed password against the hash
+   - create_access_token()  builds and signs a JWT (adds issued-at
+                            and expiry timestamps)
+   - decode_access_token()  verifies a JWT and returns its contents,
+                            or nothing if it is invalid or expired
+   Passwords longer than bcrypt's 72-byte limit are trimmed
+   consistently so hashing and checking always agree.
+
+2. Request/response shapes were defined (app/schemas.py).
+   - SignupRequest   email, password, name
+   - LoginRequest    email, password
+   - AuthResponse    token, tokenType, userId, email, name
+   The email field is checked for a sane basic shape and stored in
+   lowercase. The password must be at least 8 characters.
+
+3. Two new endpoints were added (app/main.py):
+
+   POST /signup
+     - rejects passwords shorter than 8 characters
+     - rejects an email that is already registered
+     - hashes the password and saves the new user
+     - returns HTTP 201 with a fresh token and the user's details:
+         { token, tokenType: "bearer", userId, email, name }
+
+   POST /login
+     - looks up the user by email
+     - checks the typed password against the stored hash
+     - on success returns HTTP 200 with a brand-new token in the
+       exact same shape as /signup
+     - on any failure (wrong password OR unknown email) returns
+       one generic message so attackers cannot tell which emails
+       exist
+
+4. Clean error responses were wired up.
+   Instead of long technical stack traces, bad input now returns
+   tidy JSON:
+     - 422  { "detail": "Validation failed",
+              "errors": [ { "field": ..., "message": ... } ] }
+     - 409  { "detail": "An account with this email already exists" }
+     - 401  { "detail": "Invalid email or password" }
+
+For SignUp example 
+
+{
+  "email": "test@test.com",
+  "password": "test1234",
+  "name": "Test User"
+}
+
+for login
+
+{
+  "email": "test@test.com",
+  "password": "test1234"
+}
+
+A NOTE ON LIBRARIES
+-------------------
+The project pins passlib and bcrypt together, but those two exact
+versions do not work as a pair (passlib's bcrypt bridge fails to
+load). To keep the pinned versions and still ship working hashing,
+app/auth.py calls the bcrypt library directly. Behaviour is the
+same: bcrypt-hashed passwords, no plain text anywhere.
+
+Email addresses are validated with a small built-in check rather
+than the separate "email-validator" package, which is not installed.
+
+
+HOW WE KNOW IT WORKS
+--------------------
+The signup and login logic was exercised end to end against a
+throwaway in-memory database. All of these behaved correctly:
+   - signup succeeds and returns a valid, decodable token
+   - signing up again with the same email is rejected (409)
+   - a password under 8 characters is rejected (422)
+   - a malformed email is rejected (422)
+   - login with the right password succeeds and returns a new token
+   - login with the wrong password is rejected (401)
+   - login with an unknown email is rejected (401, same message)
+   - a tampered/garbage token is refused by the decoder
+   - very long passwords hash and verify without error
+
+
+HOW TO TRY IT YOURSELF
+----------------------
+Start the server, then:
+
+   curl -X POST http://127.0.0.1:8080/signup \
+     -H "Content-Type: application/json" \
+     -d '{"email":"me@example.com","password":"secret123","name":"Me"}'
+
+   curl -X POST http://127.0.0.1:8080/login \
+     -H "Content-Type: application/json" \
+     -d '{"email":"me@example.com","password":"secret123"}'
+
+Both return a JSON body containing a "token" you can use later.
+The interactive docs at http://127.0.0.1:8080/docs list both
+new endpoints.
+
+
+FILES ADDED / CHANGED
+---------------------
+   app/auth.py       (new)  hashing + JWT create/decode helpers
+   app/schemas.py    (new)  SignupRequest, LoginRequest, AuthResponse
+   app/main.py       (edit) /signup and /login routes + JSON error
+                            handler for validation failures
+
+
+STATUS:  COMPLETE
