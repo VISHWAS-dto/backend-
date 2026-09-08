@@ -87,3 +87,16 @@ class ProductResponse(BaseModel):
     images: list[ProductImageResponse] = []
 
     model_config = {"from_attributes": True}
+
+
+class GenerateRequest(BaseModel):
+    product_id: int
+
+
+class AiJobResponse(BaseModel):
+    id: int
+    product_id: int
+    status: str
+    result: str | None = None
+
+    model_config = {"from_attributes": True}
