@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app import models  # noqa: F401  (ensures models are registered on Base.metadata)
 from app.auth import create_access_token, hash_password, verify_password
 from app.database import Base, engine, get_db
+from app.ai_jobs import router as ai_jobs_router
 from app.dependencies import get_current_user
 from app.products import router as products_router
 from app.schemas import (
@@ -56,6 +57,7 @@ _UPLOADS_DIR.mkdir(exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=_UPLOADS_DIR), name="uploads")
 
 app.include_router(products_router)
+app.include_router(ai_jobs_router)
 
 
 @app.exception_handler(RequestValidationError)

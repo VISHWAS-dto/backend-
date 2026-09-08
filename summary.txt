@@ -178,16 +178,76 @@ In short: Phase 6 = "automatically check every uploaded product photo for
 size and blur, label it READY or NEEDS ATTENTION, and save that verdict."
 
 
+PHASE 7 — GEMINI AI INTEGRATION & CATALOGUE GENERATION
+--------------------------------------------------------
+This is the first phase where the app actually uses AI.
+
+THE SIMPLE IDEA:
+The user already has products saved (with a name and a description they
+typed in earlier phases). In Phase 7, the user picks one product and the
+app asks Google's Gemini AI to write nice marketing text for it:
+  - a catchy headline
+  - a short 2-3 sentence description
+  - 3-5 "key features" bullet points
+
+Important: the AI only reads the product's NAME and DESCRIPTION (text).
+It does NOT look at the product photo. The photo checks were Phase 6;
+this is a separate step.
+
+HOW IT WORKS (step by step):
+1. The user (logged in) calls POST /generate and sends one product's ID.
+2. The app checks that product really belongs to this user. If not, it
+   replies "Product not found for this account."
+3. The app creates an "AI Job" in the database and marks it "PROCESSING"
+   (like a ticket that says "work in progress").
+4. The app sends the product name + description to Gemini and waits for
+   the reply.
+5. The app updates the job:
+     - "DONE"   -> the AI text is saved in the job
+     - "FAILED" -> a short error message is saved instead (for example:
+                   no API key, network problem, or empty reply)
+6. Either way the app replies normally. An AI problem never crashes the
+   request - it just becomes a "FAILED" job with a reason.
+7. Later, the user can call GET /status/<job_id> to check the job and
+   read the result. Users can only see their own jobs.
+
+WHERE THE AI CODE LIVES:
+- All the Gemini code is in ONE file: app/ai_service.py.
+- The rest of the app just calls one function and doesn't know or care
+  that it's Gemini.
+- So if we ever switch to another AI (OpenAI, Claude, etc.), we only
+  change that one file - nothing else.
+
+SAFETY / SETUP:
+- The Gemini API key is read from an environment variable (GEMINI_API_KEY).
+  It is never written in the code and never printed in logs.
+- If the key is missing, generation just fails cleanly (a "FAILED" job
+  that says the key isn't set) - the app still runs fine.
+- One new library was installed: google-generativeai (Google's official
+  Gemini SDK for Python).
+
+DATABASE:
+- The AiJob table (designed back in Phase 1) is now used for real. Each
+  attempt is one row: which product, the status
+  (PROCESSING / DONE / FAILED), and the result text.
+
+IN SHORT:
+Phase 7 = "user picks a product -> Gemini AI writes catalogue text for it
+-> saved as a job that ends DONE or FAILED -> all AI code kept in one
+easy-to-swap file."
+
+
 WHAT'S NOT BUILT YET (for context)
 -------------------------------------
 Looking at the database design (entities) already created in Phase 1, the
 following are prepared for but not yet built with actual APIs:
-- Catalogue generation (creating a shareable catalogue/brochure)
-- AI Jobs (background AI tasks, e.g. auto-generating catalogue designs,
-  with a status: PENDING, PROCESSING, DONE, FAILED)
+- Catalogue records (turning the AI-generated content into a saved,
+  shareable catalogue/brochure with a template and a link). The AiJob
+  side of this is now built (Phase 7); the Catalogue table itself is
+  still waiting for a future phase.
 
-These tables already exist in the database structure, ready for future
-phases to use.
+This table already exists in the database structure, ready for a future
+phase to use.
 
 
 QUICK RECAP TABLE
@@ -197,4 +257,6 @@ Phase 2/3      -> Signup, Login, JWT tokens, password security
 Phase 4        -> Create & view a business profile (one per user)
 Phase 5        -> Add products + upload product photos (with validation)
 Phase 6        -> Auto-check each photo for size + blur (READY / NEEDS ATTENTION)
-Not built yet  -> Catalogues, AI jobs
+Phase 7        -> Use Gemini AI to generate catalogue copy for a product
+                  (tracked as an AI Job: PROCESSING -> DONE / FAILED)
+Not built yet  -> Catalogue records (saved/shareable brochure)
