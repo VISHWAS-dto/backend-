@@ -70,6 +70,13 @@ class ProductImage(Base):
     image_url = Column(String, nullable=False)
     uploaded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    # Result of the deterministic pre-AI quality checks in app.validation.
+    # validation_status is "READY_FOR_AI_GENERATION" or "NEEDS_ATTENTION";
+    # validation_reasons is a newline-separated list of failure reasons ("" when
+    # the image passed).
+    validation_status = Column(String, nullable=True)
+    validation_reasons = Column(Text, nullable=True)
+
     product = relationship("Product", back_populates="images")
 
 

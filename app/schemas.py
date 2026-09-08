@@ -61,6 +61,18 @@ class BusinessResponse(BaseModel):
 class ProductImageResponse(BaseModel):
     id: int
     image_url: str
+    validation_status: str | None = None
+    validation_reasons: list[str] = []
+
+    @field_validator("validation_reasons", mode="before")
+    @classmethod
+    def _split_reasons(cls, v):
+        # Stored as a newline-separated string on the model; expose as a list.
+        if v is None or v == "":
+            return []
+        if isinstance(v, str):
+            return [line for line in v.splitlines() if line]
+        return v
 
     model_config = {"from_attributes": True}
 

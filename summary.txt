@@ -131,6 +131,53 @@ In short: Phase 5 = "let a logged-in user add products to their business,
 with photo uploads, safely validated and stored."
 
 
+PHASE 6 — AI IMAGE VALIDATION (Photo Quality Check)
+------------------------------------------------------
+Before we ask an AI to build a nice catalogue from a product photo, we
+first need to make sure the photo is actually good enough to use. A tiny
+or blurry photo would produce an ugly result. Phase 6 adds an automatic
+quality check that every uploaded photo now passes through.
+
+Important: this check is NOT AI. It uses simple, fixed math rules, so the
+same photo always gets the same result — predictable and repeatable.
+
+What we did:
+- Added a new helper file (app/validation.py) with one function,
+  validate_image(), that inspects a photo and checks two things:
+    1. Resolution (size): the photo must be at least 400 x 400 pixels.
+       Anything smaller is flagged as too low quality.
+    2. Sharpness (blur): using a well-known technique called "Laplacian
+       variance" (from the OpenCV image library), we measure how much
+       fine detail / edges the photo has. A sharp photo scores high; a
+       blurry one scores low. If it scores below the threshold, it's
+       flagged as blurry.
+- The check gives back a simple verdict for each photo:
+    - "READY_FOR_AI_GENERATION"  -> photo passed, good to use
+    - "NEEDS_ATTENTION"          -> photo failed one or more checks
+  ...plus a plain-English list of reasons for any failure, e.g.
+  "Resolution 150x150 is below the minimum 400x400." or
+  "Image appears blurry (sharpness score 0.7 is below the 100 threshold)."
+- If a file is corrupt or unreadable, it's simply marked "NEEDS_ATTENTION"
+  with a reason — it does not crash the upload, and other photos in the
+  same upload are still processed normally.
+- Two new columns were added to the ProductImage table:
+  validation_status and validation_reasons, so each photo's verdict is
+  saved in the database next to the photo.
+- The "Create Product" API (POST /products) from Phase 5 now runs this
+  check automatically on every uploaded photo and stores the result. The
+  user doesn't do anything extra — it just happens.
+- The "Get Products" API (GET /products) now includes each photo's
+  validation status and reasons in its response, so the app can show the
+  user which photos need to be replaced.
+- Installed two standard image libraries to do this: Pillow (for reading
+  image size) and opencv-python-headless (for the blur measurement).
+- Photos uploaded before Phase 6 simply show an empty/blank status — they
+  were never checked, and that's fine.
+
+In short: Phase 6 = "automatically check every uploaded product photo for
+size and blur, label it READY or NEEDS ATTENTION, and save that verdict."
+
+
 WHAT'S NOT BUILT YET (for context)
 -------------------------------------
 Looking at the database design (entities) already created in Phase 1, the
@@ -149,4 +196,5 @@ Phase 1        -> Set up project + database + skeleton folders + tables
 Phase 2/3      -> Signup, Login, JWT tokens, password security
 Phase 4        -> Create & view a business profile (one per user)
 Phase 5        -> Add products + upload product photos (with validation)
+Phase 6        -> Auto-check each photo for size + blur (READY / NEEDS ATTENTION)
 Not built yet  -> Catalogues, AI jobs

@@ -17,6 +17,7 @@ from app import models
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.schemas import ProductResponse
+from app.validation import validate_image
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -122,11 +123,17 @@ def create_product(
         file_path = dest_dir / filename
         file_path.write_bytes(contents)
 
+        # Deterministic pre-AI quality gate (resolution + blur). Runs on the
+        # file we just wrote; the result is stored alongside the image.
+        result = validate_image(str(file_path))
+
         relative_url = f"/uploads/products/{product.id}/{filename}"
         db.add(
             models.ProductImage(
                 product_id=product.id,
                 image_url=f"{base_url}{relative_url}",
+                validation_status=result["status"],
+                validation_reasons="\n".join(result["reasons"]),
             )
         )
 

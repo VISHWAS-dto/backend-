@@ -4,6 +4,7 @@ from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app import models  # noqa: F401  (ensures models are registered on Base.metadata)
@@ -21,6 +22,31 @@ from app.schemas import (
 
 # Create any missing tables on startup.
 Base.metadata.create_all(bind=engine)
+
+
+def _ensure_product_image_validation_columns() -> None:
+    """Add the Phase 6 validation columns to product_images if they're missing.
+
+    create_all() won't alter an existing table, so for databases created before
+    Phase 6 we add the columns here. Both statements are no-ops on an
+    already-migrated database.
+    """
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE product_images "
+                "ADD COLUMN IF NOT EXISTS validation_status VARCHAR"
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE product_images "
+                "ADD COLUMN IF NOT EXISTS validation_reasons TEXT"
+            )
+        )
+
+
+_ensure_product_image_validation_columns()
 
 app = FastAPI(title="catalyx-backend-py")
 
